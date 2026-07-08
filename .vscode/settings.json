@@ -1,0 +1,6 @@
+{
+    "sonarlint.connectedMode.project": {
+        "connectionId": "wenhan-sqc-org",
+        "projectKey": "wenhan-sqc-org_sql-verification-demo"
+    }
+}
