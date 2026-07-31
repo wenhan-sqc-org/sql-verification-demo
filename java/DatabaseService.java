@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,31 +32,33 @@ public class DatabaseService {
     // scanned; this Java method IS.
 
     /** [BAD] String concatenation builds an injectable query — S2077 fires here. */
-    public List<String> bad_getUserByName(Connection conn, String username) throws Exception {
+    public List<String> bad_getUserByName(Connection conn, String username) throws SQLException {
         // SonarQube S2077: user-controlled value flows into a SQL string
         String query = "SELECT id, username FROM users WHERE username = '" + username + "'";
-        Statement stmt = conn.createStatement();
-        ResultSet rs = stmt.executeQuery(query); // <-- S2077 flagged on this line
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
 
-        List<String> results = new ArrayList<>();
-        while (rs.next()) {
-            results.add(rs.getString("username"));
+            List<String> results = new ArrayList<>();
+            while (rs.next()) {
+                results.add(rs.getString("username"));
+            }
+            return results;
         }
-        return results;
     }
 
     /** [GOOD] Parameterized PreparedStatement — no injection risk, S2077 silent. */
-    public List<String> good_getUserByName(Connection conn, String username) throws Exception {
+    public List<String> good_getUserByName(Connection conn, String username) throws SQLException {
         String query = "SELECT id, username FROM users WHERE username = ?";
-        PreparedStatement pstmt = conn.prepareStatement(query);
-        pstmt.setString(1, username);
-        ResultSet rs = pstmt.executeQuery();
-
-        List<String> results = new ArrayList<>();
-        while (rs.next()) {
-            results.add(rs.getString("username"));
+        try (PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, username);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                List<String> results = new ArrayList<>();
+                while (rs.next()) {
+                    results.add(rs.getString("username"));
+                }
+                return results;
+            }
         }
-        return results;
     }
 
     // =========================================================================
@@ -66,7 +69,7 @@ public class DatabaseService {
     // of whether the SQL plugin is configured.
 
     /** [BAD] Hard-coded password literal — S2068 fires on the string below. */
-    public Connection bad_getConnection() throws Exception {
+    public Connection bad_getConnection() throws SQLException {
         String url      = "jdbc:mysql://localhost:3306/mydb";
         String user     = "app_user";
         String password = "SuperSecret123!"; // <-- S2068 flagged here
