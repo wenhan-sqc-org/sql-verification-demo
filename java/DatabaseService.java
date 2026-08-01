@@ -1,10 +1,9 @@
-package com.example.demo;
+package java;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,14 +31,14 @@ public class DatabaseService {
 
     /** [BAD] String concatenation builds an injectable query — S2077 fires here. */
     public List<String> bad_getUserByName(Connection conn, String username) throws Exception {
-        // SonarQube S2077: user-controlled value flows into a SQL string
-        String query = "SELECT id, username FROM users WHERE username = '" + username + "'";
-        Statement stmt = conn.createStatement();
-        ResultSet rs = stmt.executeQuery(query); // <-- S2077 flagged on this line
-
+        String query = "SELECT id, username FROM users WHERE username = ?";
         List<String> results = new ArrayList<>();
-        while (rs.next()) {
-            results.add(rs.getString("username"));
+        try (PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, username);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                results.add(rs.getString("username"));
+            }
         }
         return results;
     }
@@ -69,7 +68,7 @@ public class DatabaseService {
     public Connection bad_getConnection() throws Exception {
         String url      = "jdbc:mysql://localhost:3306/mydb";
         String user     = "app_user";
-        String password = "SuperSecret123!"; // <-- S2068 flagged here
+        String password = System.getenv("DB_PASSWORD");
         return DriverManager.getConnection(url, user, password);
     }
 
@@ -90,8 +89,7 @@ public class DatabaseService {
 
     /** [BAD] Identical sub-expressions in a boolean condition — S1764 fires. */
     public boolean bad_isEligible(int score) {
-        // S1764: both sides of && are identical — the second check is redundant
-        return score > 50 && score > 50; // <-- S1764 flagged here
+        return score > 50;
     }
 
     /** [GOOD] Each sub-expression tests a distinct condition. */
@@ -112,39 +110,37 @@ public class DatabaseService {
      * Cognitive complexity is well above the default threshold of 15 — S3776 fires.
      */
     public String bad_getPriorityLabel(String status, double totalAmount, String customerTier) {
-        // +1 (if)
-        if (status.equals("PENDING")) {
-            // +2 (nested if)
-            if (totalAmount > 1000) {
-                // +3 (nested if)
-                if (customerTier.equals("GOLD")) {
-                    return "HIGH_PRIORITY_GOLD";
-                } else { // +1
-                    // +4 (nested if)
-                    if (customerTier.equals("SILVER")) {
-                        return "HIGH_PRIORITY_SILVER";
-                    } else { // +1
-                        return "HIGH_PRIORITY";
-                    }
-                }
-            } else { // +1
-                // +3 (nested if)
-                if (totalAmount > 500) {
-                    return "MEDIUM_PRIORITY";
-                } else { // +1
-                    return "NORMAL_PRIORITY";
-                }
-            }
-        } else { // +1
-            // +2 (nested if)
-            if (status.equals("SHIPPED")) {
-                return "IN_TRANSIT";
-            } else { // +1
-                return "NOT_PENDING";
-            }
+        if (!status.equals("PENDING")) {
+            return getNonPendingLabel(status);
         }
-        // Total cognitive complexity ≈ 18 — exceeds default threshold of 15
-        // S3776 fires here
+        return getPendingPriorityLabel(totalAmount, customerTier);
+    }
+
+    private String getNonPendingLabel(String status) {
+        if (status.equals("SHIPPED")) {
+            return "IN_TRANSIT";
+        }
+        return "NOT_PENDING";
+    }
+
+    private String getPendingPriorityLabel(double totalAmount, String customerTier) {
+        if (totalAmount > 1000) {
+            return getHighPriorityLabel(customerTier);
+        }
+        if (totalAmount > 500) {
+            return "MEDIUM_PRIORITY";
+        }
+        return "NORMAL_PRIORITY";
+    }
+
+    private String getHighPriorityLabel(String customerTier) {
+        if (customerTier.equals("GOLD")) {
+            return "HIGH_PRIORITY_GOLD";
+        }
+        if (customerTier.equals("SILVER")) {
+            return "HIGH_PRIORITY_SILVER";
+        }
+        return "HIGH_PRIORITY";
     }
 
     /**
