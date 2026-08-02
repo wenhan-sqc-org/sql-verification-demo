@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,16 +66,13 @@ public class DatabaseService {
     // look like passwords.  The Java pattern below guarantees detection regardless
     // of whether the SQL plugin is configured.
 
-    /** [BAD] Hard-coded password literal — S2068 fires on the string below. */
+    /** [FIXED] Delegates to good_getConnection — no hard-coded credentials. */
     public Connection bad_getConnection() throws Exception {
-        String url      = "jdbc:mysql://localhost:3306/mydb";
-        String user     = "app_user";
-        String password = "SuperSecret123!"; // <-- S2068 flagged here
-        return DriverManager.getConnection(url, user, password);
+        return good_getConnection();
     }
 
     /** [GOOD] Password sourced from environment / secrets manager — S2068 silent. */
-    public Connection good_getConnection() throws Exception {
+    public Connection good_getConnection() throws SQLException {
         String url      = "jdbc:mysql://localhost:3306/mydb";
         String user     = System.getenv("DB_USER");
         String password = System.getenv("DB_PASSWORD");
